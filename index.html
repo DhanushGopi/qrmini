@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QShare - P2P Image Transfer</title>
+    <!-- Tailwind CSS for Modern Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- QR Code Scanner Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between font-sans selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="py-6 px-4 text-center border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <h1 class="text-2xl font-black tracking-wider bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+            QSHARE <span class="text-xs uppercase px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30">Mini</span>
+        </h1>
+        <p class="text-xs text-slate-400 mt-1">Transfer compressed JPGs instantly via QR code</p>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-md w-full mx-auto p-4 flex-grow flex flex-col justify-center">
+
+        <!-- Tab Switcher -->
+        <div class="flex bg-slate-800 p-1 rounded-xl mb-6 border border-slate-700/50 shadow-inner">
+            <button id="tabSendBtn" onclick="switchTab('send')" class="flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all bg-indigo-600 text-white shadow-md">
+                📤 Send Image
+            </button>
+            <button id="tabReceiveBtn" onclick="switchTab('receive')" class="flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all text-slate-400 hover:text-white">
+                📥 Receive Image
+            </button>
+        </div>
+
+        <!-- ================= SENDER VIEW ================= -->
+        <div id="sendView" class="space-y-4">
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Select Image to Send
+                </h2>
+                
+                <label class="flex flex-col items-center justify-center border-2 border-dashed border-slate-600 hover:border-indigo-400 rounded-xl p-6 cursor-pointer bg-slate-900/40 transition-all group">
+                    <div class="space-y-2 text-center">
+                        <svg class="mx-auto h-10 w-10 text-slate-400 group-hover:text-indigo-400 transition-colors" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <p class="text-sm text-slate-300 font-medium">Tap to pick a JPG file</p>
+                        <p class="text-xs text-slate-500">Automatically compressed for QR fitting</p>
+                    </div>
+                    <input type="file" id="fileInput" accept="image/jpeg" class="hidden">
+                </label>
+
+                <!-- Status & Stats -->
+                <div id="sendStatus" class="mt-4 text-center text-xs text-slate-400 font-medium"></div>
+
+                <!-- QR Display Container -->
+                <div id="qrWrapper" class="mt-4 hidden flex flex-col items-center justify-center bg-white p-4 rounded-xl shadow-inner">
+                    <div id="qrcode"></div>
+                    <p class="text-slate-600 text-xs mt-3 font-semibold">Scan this code with the receiver phone</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= RECEIVER VIEW ================= -->
+        <div id="receiveView" class="space-y-4 hidden">
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+                <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> Scan Sender's QR Code
+                </h2>
+                
+                <div id="scannerContainer" class="overflow-hidden rounded-xl bg-black border border-slate-700 relative aspect-square flex items-center justify-center">
+                    <div id="reader" class="w-full"></div>
+                </div>
+
+                <div id="receiveStatus" class="mt-3 text-center text-xs text-slate-400">Camera ready. Tap scan when ready.</div>
+
+                <!-- Received Preview Section -->
+                <div id="resultCard" class="mt-4 hidden space-y-3">
+                    <div class="border border-slate-700 rounded-xl overflow-hidden bg-slate-900 p-2">
+                        <img id="previewImg" class="w-full h-auto rounded-lg max-h-60 object-contain mx-auto" alt="Transferred Preview">
+                    </div>
+                    <a id="downloadBtn" download="received-photo.jpg" class="block w-full">
+                        <button class="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                            💾 Download Image File
+                        </button>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-800">
+        Client-side transfer • No server logs
+    </footer>
+
+    <!-- Script Logic -->
+    <script>
+        // Tab Switcher Logic
+        function switchTab(tab) {
+            const sendView = document.getElementById('sendView');
+            const receiveView = document.getElementById('receiveView');
+            const sendBtn = document.getElementById('tabSendBtn');
+            const receiveBtn = document.getElementById('tabReceiveBtn');
+
+            if (tab === 'send') {
+                sendView.classList.remove('hidden');
+                receiveView.classList.add('hidden');
+                sendBtn.className = "flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all bg-indigo-600 text-white shadow-md";
+                receiveBtn.className = "flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all text-slate-400 hover:text-white";
+                stopScanner();
+            } else {
+                sendView.classList.add('hidden');
+                receiveView.classList.remove('hidden');
+                receiveBtn.className = "flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all bg-cyan-600 text-white shadow-md";
+                sendBtn.className = "flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all text-slate-400 hover:text-white";
+                initScanner();
+            }
+        }
+
+        // ---- SENDER LOGIC ----
+        const fileInput = document.getElementById('fileInput');
+        const sendStatus = document.getElementById('sendStatus');
+        const qrWrapper = document.getElementById('qrWrapper');
+        const qrcodeContainer = document.getElementById('qrcode');
+        let qrInstance = null;
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            sendStatus.textContent = "Processing & shrinking image...";
+            qrWrapper.classList.add('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    // Shrink resolution to safely fit QR limitations (~2.5KB max string size)
+                    const MAX_SIZE = 120;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                    } else {
+                        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress JPEG quality to 0.4 to reduce weight
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+
+                    if (dataUrl.length > 2800) {
+                        sendStatus.textContent = "❌ Image payload too large even after compression. Choose a simpler photo.";
+                        return;
+                    }
+
+                    sendStatus.innerHTML = `✅ Ready! Package size: <span class="text-indigo-400 font-mono">${Math.round(dataUrl.length / 1024)} KB</span>`;
+                    
+                    // Generate QR Code
+                    qrcodeContainer.innerHTML = "";
+                    qrInstance = new QRCode(qrcodeContainer, {
+                        text: dataUrl,
+                        width: 200,
+                        height: 200,
+                        colorDark: "#0f172a",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.L
+                    });
+
+                    qrWrapper.classList.remove('hidden');
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+
+        // ---- RECEIVER LOGIC ----
+        let html5QrCode = null;
+        let scannerRunning = false;
+
+        function initScanner() {
+            if (scannerRunning) return;
+            
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                config, 
+                onScanSuccess,
+                onScanFailure
+            ).then(() => {
+                scannerRunning = true;
+                document.getElementById('receiveStatus').textContent = "Point camera at the sender's QR code";
+            }).catch(err => {
+                document.getElementById('receiveStatus').textContent = "⚠️ Camera access denied or unavailable.";
+                console.error(err);
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrCode && scannerRunning) {
+                html5QrCode.stop().then(() => {
+                    scannerRunning = false;
+                }).catch(err => console.error("Failed to stop scanner", err));
+            }
+        }
+
+        function onScanSuccess(decodedText) {
+            // Verify if scanned string looks like a base64 image data-URI
+            if (decodedText.startsWith("data:image/jpeg;base64,")) {
+                stopScanner();
+                document.getElementById('scannerContainer').classList.add('hidden');
+                document.getElementById('receiveStatus').innerHTML = "<span class='text-emerald-400 font-semibold'>✨ Image successfully transferred!</span>";
+                
+                const previewImg = document.getElementById('previewImg');
+                const downloadBtn = document.getElementById('downloadBtn');
+                const resultCard = document.getElementById('resultCard');
+
+                previewImg.src = decodedText;
+                downloadBtn.href = decodedText;
+                resultCard.classList.remove('hidden');
+            } else {
+                document.getElementById('receiveStatus').textContent = "⚠️ Scanned code is not a valid QShare image.";
+            }
+        }
+
+        function onScanFailure(error) {
+            // Fired continuously while scanning frames; safe to ignore minor scan misses
+        }
+    </script>
+</body>
+</html>
