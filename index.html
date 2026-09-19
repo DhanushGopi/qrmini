@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QShare - P2P Image Transfer</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- QR Code Generator -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- QR Code Scanner -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between font-sans">
@@ -31,7 +34,7 @@
             
             <div id="qrBoxContainer" class="hidden flex flex-col items-center bg-white p-4 rounded-xl">
                 <div id="qrcode"></div>
-                <p class="text-slate-700 text-xs mt-2 font-semibold">Tip: If live scan fails, take a screenshot of this QR</p>
+                <p class="text-slate-700 text-xs mt-2 font-semibold text-center">Scan this code or take a screenshot</p>
             </div>
         </div>
 
@@ -40,12 +43,12 @@
             <h2 class="text-base font-bold mb-3 text-cyan-300">Scan QR Code</h2>
             
             <!-- Live Camera View -->
-            <div id="reader" class="rounded-xl overflow-hidden border border-slate-800 mb-3 bg-black"></div>
+            <div id="reader" class="rounded-xl overflow-hidden border border-slate-800 mb-3 bg-black min-h-[220px]"></div>
             
-            <!-- Recommended Fallback: Upload QR Screenshot -->
+            <!-- Fallback File Uploader for Screenshots -->
             <div class="mt-3 pt-3 border-t border-slate-800 bg-slate-950/50 p-3 rounded-xl border border-slate-800">
-                <p class="text-xs text-cyan-400 font-semibold mb-1">💡 Recommended Method:</p>
-                <p class="text-xs text-slate-400 mb-2">Upload a screenshot of the QR code for instant decoding:</p>
+                <p class="text-xs text-cyan-400 font-semibold mb-1">💡 Having camera issues?</p>
+                <p class="text-xs text-slate-400 mb-2">Upload a screenshot of the sender's QR code instead:</p>
                 <input type="file" id="qrFileIn" accept="image/*" class="w-full text-xs text-slate-400 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-cyan-600 file:text-white cursor-pointer">
             </div>
 
@@ -82,45 +85,53 @@
                 cardReceive.classList.remove('hidden');
                 btnReceive.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-cyan-600 text-white transition";
                 btnSend.className = "flex-1 py-2 text-sm font-bold rounded-lg text-slate-400 transition";
-                startCam();
+                
+                setTimeout(startCam, 300);
             }
         }
 
-        // SENDER LOGIC (Optimized for lower density QR)
+        // SENDER LOGIC
         document.getElementById('fileIn').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
-            document.getElementById('sendInfo').innerText = "Shrinking image to fit QR...";
+            const sendInfo = document.getElementById('sendInfo');
+            sendInfo.innerText = "Processing image...";
+            
             const reader = new FileReader();
+            reader.onerror = () => { sendInfo.innerText = "Error reading file."; };
             reader.onload = (event) => {
                 const img = new Image();
                 img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX = 95; // Keeps pixel grid low enough for scanners
-                    let w = img.width, h = img.height;
-                    if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
-                    else { if (h > MAX) { w *= MAX / h; h = MAX; } }
-                    canvas.width = w; canvas.height = h;
-                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const MAX = 80; // Small grid size to ensure it fits into standard QR limits
+                        let w = img.width, h = img.height;
+                        if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
+                        else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.35);
-                    if (dataUrl.length > 2400) {
-                        document.getElementById('sendInfo').innerText = "Image too complex. Try a simpler photo.";
-                        return;
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.3);
+                        if (dataUrl.length > 2500) {
+                            sendInfo.innerText = "❌ Image payload too large. Choose a simpler photo.";
+                            return;
+                        }
+
+                        sendInfo.innerText = `✅ QR Ready! (${Math.round(dataUrl.length/1024)} KB)`;
+                        const qrcodeDiv = document.getElementById('qrcode');
+                        qrcodeDiv.innerHTML = "";
+                        
+                        new QRCode(qrcodeDiv, { 
+                            text: dataUrl, 
+                            width: 200, 
+                            height: 200,
+                            correctLevel: QRCode.CorrectLevel.L
+                        });
+                        document.getElementById('qrBoxContainer').classList.remove('hidden');
+                    } catch (err) {
+                        sendInfo.innerText = "❌ Error: " + err.message;
                     }
-
-                    document.getElementById('sendInfo').innerText = `QR Ready! (${Math.round(dataUrl.length/1024)} KB)`;
-                    document.getElementById('qrcode').innerHTML = "";
-                    
-                    // Generate using Low Correction level to minimize grid density
-                    new QRCode(document.getElementById('qrcode'), { 
-                        text: dataUrl, 
-                        width: 220, 
-                        height: 220,
-                        correctLevel: QRCode.CorrectLevel.L
-                    });
-                    document.getElementById('qrBoxContainer').classList.remove('hidden');
                 };
                 img.src = event.target.result;
             };
@@ -129,16 +140,25 @@
 
         // RECEIVER CAMERA
         function startCam() {
+            const recvStatus = document.getElementById('recvStatus');
+            if (!window.Html5Qrcode) {
+                recvStatus.innerText = "Scanner library failed to load from CDN.";
+                return;
+            }
+
             if (!html5QrCode) {
                 html5QrCode = new Html5Qrcode("reader");
             }
+            
+            if (html5QrCode.isScanning) return;
+
             html5QrCode.start(
                 { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 220, height: 220 } },
+                { fps: 10, qrbox: { width: 200, height: 200 } },
                 onScanSuccess,
                 () => {}
             ).catch(err => {
-                document.getElementById('recvStatus').innerText = "Camera active error. Use file upload below.";
+                recvStatus.innerText = "Camera access blocked or unavailable. Use the screenshot uploader below.";
             });
         }
 
@@ -151,26 +171,28 @@
         function onScanSuccess(text) {
             if (text && text.startsWith("data:image/jpeg;base64,")) {
                 stopCam();
-                document.getElementById('recvStatus').innerHTML = "<span class='text-emerald-400 font-bold'>Success!</span>";
+                document.getElementById('recvStatus').innerHTML = "<span class='text-emerald-400 font-bold'>Success! Image received.</span>";
                 document.getElementById('imgPreview').src = text;
                 document.getElementById('downloadLink').href = text;
                 document.getElementById('resultArea').classList.remove('hidden');
+            } else {
+                document.getElementById('recvStatus').innerText = "⚠️ Scanned code is not a valid QShare image.";
             }
         }
 
-        // Screenshot File Uploader (100% Reliable for dense data)
+        // Screenshot File Uploader Fallback
         document.getElementById('qrFileIn').addEventListener('change', e => {
             const file = e.target.files[0];
             if (!file) return;
             
             document.getElementById('recvStatus').innerText = "Decoding screenshot...";
-            const scanner = new Html5Qrcode("reader");
-            scanner.scanFile(file, true)
+            const tempScanner = new Html5Qrcode("reader");
+            tempScanner.scanFile(file, true)
                 .then(text => {
                     onScanSuccess(text);
                 })
                 .catch(err => {
-                    document.getElementById('recvStatus').innerText = "❌ Could not decode. Make sure it's a clear screenshot of the QShare QR.";
+                    document.getElementById('recvStatus').innerText = "❌ Could not decode. Ensure it's a clear screenshot.";
                 });
         });
     </script>
